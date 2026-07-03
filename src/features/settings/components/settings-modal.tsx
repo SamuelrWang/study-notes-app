@@ -121,10 +121,6 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onBan
             <ProfilePage
               profile={settings.profile}
               onChange={(profile) => onSettingsChange({ ...settings, profile })}
-              aiKey={settings.aiKey ?? ""}
-              onAiKeyChange={(aiKey) =>
-                onSettingsChange({ ...settings, aiKey: aiKey.trim() || undefined })
-              }
             />
           )}
         </div>

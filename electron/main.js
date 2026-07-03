@@ -63,23 +63,6 @@ const waitForServer = (url, timeoutMs = 15000) =>
     tick();
   });
 
-// Runtime env bundled with the server (.env.local — Anthropic key etc.).
-// Parsed here and injected into the fork explicitly, so it works regardless
-// of whether the standalone server loads env files itself.
-function bundledEnv(serverDir) {
-  const env = {};
-  try {
-    const raw = fs.readFileSync(path.join(serverDir, ".env.local"), "utf8");
-    for (const line of raw.split("\n")) {
-      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-      if (m) env[m[1]] = m[2];
-    }
-  } catch {
-    // no bundled env — fine
-  }
-  return env;
-}
-
 async function startServer() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const serverDir = path.join(process.resourcesPath, "app-server");
@@ -88,7 +71,6 @@ async function startServer() {
     cwd: serverDir,
     stdio: "pipe",
     env: {
-      ...bundledEnv(serverDir),
       ...process.env,
       NODE_ENV: "production",
       PORT: String(port),

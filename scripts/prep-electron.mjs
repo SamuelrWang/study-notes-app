@@ -19,9 +19,9 @@ rmSync(stage, { recursive: true, force: true });
 cpSync(standalone, stage, { recursive: true });
 cpSync(".next/static", `${stage}/.next/static`, { recursive: true });
 cpSync("public", `${stage}/public`, { recursive: true });
-// Runtime env (Anthropic key etc.) rides inside the bundle — git-ignored,
-// but intentionally shipped so every user of the app shares the same key.
-if (existsSync(".env.local")) cpSync(".env.local", `${stage}/.env.local`);
+// NOTE: .env.local is deliberately NOT copied — the app ships in a public
+// GitHub release, so no secrets may enter the bundle. The Anthropic key
+// lives in the Supabase Edge Function (supabase/functions/import-outline).
 
 // Belt and braces on top of outputFileTracingExcludes: user data must never
 // ship, and packaging output nested inside the bundle recreates the

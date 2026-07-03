@@ -1,26 +1,15 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { readSettings } from "@/lib/settings";
+// Outline-import proxy: holds the shared Anthropic key server-side and
+// streams NDJSON back to the app. Supabase verifies the caller's JWT before
+// this runs (verify_jwt), so only signed-in Study Notes users can spend.
+import Anthropic from "npm:@anthropic-ai/sdk";
 
-// Parse uploaded outline photos/PDFs with Claude and stream the outline back
-// as NDJSON — one strict JSON object per line, so the client can validate and
-// apply each record in real time:
-//
-//   {"kind":"meta","number":"5","title":"…","scriptureReading":"Ref; Ref"}
-//   {"kind":"point","depth":0,"text":"… with [Book C:V] verse brackets …"}
-//   {"kind":"error","message":"…"}   (model guard or route failure)
-//
-// Imports are one message outline per note by design — the upload button
-// lives inside a single note, and the model refuses multi-message uploads.
-export const dynamic = "force-dynamic";
-
-type UploadedFile = {
-  kind: "image" | "pdf";
-  media_type: string;
-  data: string; // base64
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// The verse rules mirror AGENTS.md §3 — the same inheritance logic the
-// markdown importer implements in code, here enforced by instruction.
+// Mirrors AGENTS.md §3 — the verse-inheritance rules the markdown importer
+// implements in code, enforced here by instruction.
 const SYSTEM = `You transcribe ONE printed Bible-study message outline (Living Stream Ministry / Recovery Version style) into NDJSON. Accuracy is critical: copy wording exactly as printed — never paraphrase, correct, or abbreviate.
 
 OUTPUT: one JSON object per line, nothing else (no code fences, no commentary, no wrapping array):
@@ -45,29 +34,26 @@ RULES
 8. Multiple pages/images are consecutive pages of the SAME message — continue through them in order.
 9. Every line must be valid standalone JSON. Escape quotes inside text properly.`;
 
-export async function POST(req: Request) {
+type UploadedFile = { kind: "image" | "pdf"; media_type: string; data: string };
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+
   const { files } = (await req.json()) as { files: UploadedFile[] };
   if (!files?.length) {
-    return Response.json({ error: "No files uploaded." }, { status: 400 });
+    return Response.json({ error: "No files uploaded." }, { status: 400, headers: CORS });
   }
 
-  const settings = await readSettings();
-  const apiKey = process.env.ANTHROPIC_API_KEY || settings.aiKey;
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) {
-    return Response.json(
-      { error: "No Anthropic API key. Add one in Settings → Profile → AI." },
-      { status: 400 },
-    );
+    return Response.json({ error: "Import service not configured." }, { status: 500, headers: CORS });
   }
 
   const client = new Anthropic({ apiKey });
   const content: Anthropic.ContentBlockParam[] = [
     ...files.map<Anthropic.ContentBlockParam>((f) =>
       f.kind === "pdf"
-        ? {
-            type: "document",
-            source: { type: "base64", media_type: "application/pdf", data: f.data },
-          }
+        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: f.data } }
         : {
             type: "image",
             source: {
@@ -98,9 +84,7 @@ export async function POST(req: Request) {
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Import failed";
-        controller.enqueue(
-          encoder.encode(`\n${JSON.stringify({ kind: "error", message: msg })}\n`),
-        );
+        controller.enqueue(encoder.encode(`\n${JSON.stringify({ kind: "error", message: msg })}\n`));
       }
       controller.close();
     },
@@ -110,6 +94,6 @@ export async function POST(req: Request) {
   });
 
   return new Response(body, {
-    headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" },
+    headers: { ...CORS, "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" },
   });
-}
+});

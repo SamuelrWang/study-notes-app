@@ -17,9 +17,6 @@ export type ShortcutRule = {
 export type Settings = {
   profile: Profile;
   shortcuts: ShortcutRule[];
-  // Anthropic API key for the outline-import feature. Local-only, read by the
-  // server route; the ANTHROPIC_API_KEY env var takes precedence when set.
-  aiKey?: string;
 };
 
 export const DEFAULT_SETTINGS: Settings = {

@@ -3,6 +3,7 @@
 import type { Note, OutlinePoint } from "./types";
 import { newPoint } from "./outline";
 import { expandLabel, parseEditedText } from "./refs";
+import { getSupabase } from "@/lib/supabase-client";
 
 // Client half of the outline import: prepare uploaded files, stream the
 // parsed outline from /api/import-outline, and apply it to the note line by
@@ -127,12 +128,29 @@ export async function importOutline(
   onProgress: (p: ImportProgress) => void,
   signal: AbortSignal,
 ): Promise<void> {
+  // The import runs through a Supabase Edge Function that holds the shared
+  // Anthropic key server-side; the user's sign-in token gates access.
+  const { data } = await getSupabase().auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) {
+    onProgress({ points: 0, done: true, error: "Sign in (and be online) to import outlines." });
+    return;
+  }
+
   const prepared = await prepareFiles(files);
-  const res = await fetch("/api/import-outline", {
-    method: "POST",
-    body: JSON.stringify({ files: prepared }),
-    signal,
-  });
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/import-outline`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ files: prepared }),
+      signal,
+    },
+  );
 
   if (!res.ok || !res.body) {
     const msg = (await res.json().catch(() => null))?.error ?? `Import failed (${res.status})`;

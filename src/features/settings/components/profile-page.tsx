@@ -11,13 +11,11 @@ import { getSupabase } from "@/lib/supabase-client";
 type Props = {
   profile: Profile;
   onChange: (profile: Profile) => void;
-  aiKey: string;
-  onAiKeyChange: (aiKey: string) => void;
 };
 
 const AVATAR_SIZE = 128; // stored downscaled so settings.json stays small
 
-export function ProfilePage({ profile, onChange, aiKey, onAiKeyChange }: Props) {
+export function ProfilePage({ profile, onChange }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
 
@@ -132,29 +130,6 @@ export function ProfilePage({ profile, onChange, aiKey, onAiKeyChange }: Props) 
         </p>
       </div>
 
-      {/* AI — powers the outline import */}
-      <div className="mt-6 border-t border-[var(--border-soft)] pt-4">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--faint)]">
-          AI
-        </div>
-        <label className="mt-2 flex max-w-sm flex-col gap-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--faint)]">
-            Anthropic API key
-          </span>
-          <input
-            type="password"
-            value={aiKey}
-            placeholder="sk-ant-…"
-            autoComplete="off"
-            onChange={(e) => onAiKeyChange(e.target.value)}
-            className="concave-field rounded-lg px-2.5 py-1.5 text-sm text-[var(--text)] outline-none"
-          />
-        </label>
-        <p className="mt-1.5 text-xs text-[var(--muted)]">
-          Used to read outlines from photos. Stored only on this computer — get a
-          key at console.anthropic.com.
-        </p>
-      </div>
     </div>
   );
 }
