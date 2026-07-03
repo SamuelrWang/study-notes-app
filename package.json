@@ -15,7 +15,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/SamuelrSun/study-notes-app.git"
+    "url": "https://github.com/SamuelrWang/study-notes-app.git"
   },
   "build": {
     "appId": "com.samuelwang.studynotes",
@@ -30,7 +30,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "SamuelrSun",
+        "owner": "SamuelrWang",
         "repo": "study-notes-app"
       }
     ],
