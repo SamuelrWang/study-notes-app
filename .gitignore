@@ -1,0 +1,21 @@
+/node_modules
+/.next
+/out
+next-env.d.ts
+*.tsbuildinfo
+.DS_Store
+
+# local note data — never commit
+/data
+
+# electron packaging
+/dist-app
+/build/icon.iconset
+/dist-server
+
+# env
+.env*
+
+# local data backups + local claude config
+/data.backup*
+/.claude

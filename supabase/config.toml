@@ -1,0 +1,13 @@
+# Supabase project config — pushed to the hosted project with
+# `supabase config push`. Only auth is managed here; there is no local stack.
+project_id = "study-notes"
+
+[auth]
+site_url = "http://localhost:3000"
+# Browser callback (magic-link / password-reset emails land here).
+additional_redirect_urls = ["http://localhost:3000/**"]
+
+[auth.email]
+enable_signup = true
+# No SMTP for this personal app — accounts are usable immediately.
+enable_confirmations = false

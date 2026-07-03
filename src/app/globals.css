@@ -1,0 +1,313 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────────────
+   Palette — light neutral grays (matches the Dopl design system).
+   Frame behind floating bento cards, white-ish card surfaces, dark ink
+   chip (#1c2127), Helvetica Neue type. No sand tones.
+   ───────────────────────────────────────────────────────────────────── */
+:root {
+  --frame: #e6e8eb; /* app background behind the cards */
+  --sidebar: #f1f2f4; /* left rail surface */
+  --card: #fbfcfd; /* panel surface */
+  --card-2: #f4f6f9; /* subtle inset card */
+  --inset: #eef1f5; /* concave field fill */
+
+  --border: rgba(0, 0, 0, 0.08);
+  --border-soft: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.12);
+
+  --text: #232a31;
+  --muted: #646d78;
+  --faint: #98a2ad;
+
+  --ink: #1c2127; /* dark chip / cta */
+  --link: #2f6fed;
+
+  /* aliases so existing component classes resolve to the new palette */
+  --bg: var(--card);
+  --panel: var(--card);
+  --panel-2: var(--card-2);
+  --accent: #3e3a3b;
+  --accent-soft: var(--inset);
+}
+
+html {
+  color-scheme: light;
+  height: 100%;
+}
+
+body {
+  height: 100%;
+  background: var(--frame);
+  color: var(--text);
+  font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Bento card — floating panel surface ─────────────────────────────── */
+.bento {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 6px 18px rgba(0, 0, 0, 0.05);
+}
+
+/* ── Raised black 3D button — the selected outline point ─────────────── */
+.raised-black {
+  background: linear-gradient(180deg, #313131 0%, #1c1c1c 52%, #111 100%);
+  border: 1px solid #000;
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 2px 3px rgba(0, 0, 0, 0.22),
+    0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Concave (pressed-in) selection — selected sidebar item ──────────── */
+.concave-sel {
+  background: #e9e9e7;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.12),
+    inset 0 1px 1px rgba(0, 0, 0, 0.06),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* ── Concave field — the notes editors ───────────────────────────────── */
+.concave-field {
+  background: var(--inset);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.1),
+    inset 0 1px 2px rgba(0, 0, 0, 0.06),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+.concave-field:focus-within {
+  border-color: rgba(24, 24, 24, 0.22);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.13),
+    inset 0 1px 2px rgba(0, 0, 0, 0.07),
+    0 0 0 3px rgba(24, 24, 24, 0.06);
+}
+
+/* ── Raised light button — toolbar / small controls ──────────────────── */
+.btn-light {
+  background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
+  border: 1px solid #d6d8db;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+.btn-light:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 3px 7px rgba(0, 0, 0, 0.08);
+}
+.btn-light:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* yellow marker highlight inside the notes editors */
+mark {
+  background: #fde047;
+  color: #1a1a1a;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* placeholder for empty contentEditable note boxes */
+.rich-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--faint);
+  pointer-events: none;
+}
+.rich-editor {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* auto-growing, wrapping title field (Chrome field-sizing) */
+.title-area {
+  field-sizing: content;
+  overflow: hidden;
+}
+
+/* verse line editors + reference numbers */
+.line-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--faint);
+  pointer-events: none;
+}
+.verse-num {
+  font-weight: 600;
+  color: var(--faint);
+  margin-right: 3px;
+}
+
+/* ruled, underline-style introduction editor */
+.intro-editor {
+  line-height: 28px;
+  min-height: 56px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 27px,
+    var(--border) 27px,
+    var(--border) 28px
+  );
+}
+.intro-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--faint);
+  pointer-events: none;
+}
+.intro-collapsed {
+  max-height: 56px;
+  overflow: hidden;
+}
+
+/* verse tab — a detached, bordered rectangle floating inside the outline
+   panel (like the intro box), lifted with a shadow along its bottom edge. */
+.verse-tab {
+  background: var(--card-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow: 0 10px 20px -10px rgba(0, 0, 0, 0.22);
+}
+.verse-tab .line-editor {
+  line-height: 1.35;
+}
+
+/* ── Settings modal — enter/exit transitions (see settings-modal.tsx) ── */
+.modal-overlay {
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.modal-overlay.shown {
+  opacity: 1;
+}
+.modal-panel {
+  opacity: 0;
+  transform: scale(0.96) translateY(12px);
+  transition:
+    opacity 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-panel.shown {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── Auth 3D controls (login / reset) — ported from the Dopl design ────── */
+@keyframes loginFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.auth-btn-3d {
+  background: linear-gradient(180deg, #313131 0%, #1c1c1c 52%, #111 100%);
+  border: 1px solid #000;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 2px 3px rgba(0, 0, 0, 0.22),
+    0 6px 16px rgba(0, 0, 0, 0.2);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+.auth-btn-3d:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.auth-btn-3d:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: brightness(0.96);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.auth-btn-3d:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-btn-3d-light {
+  background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
+  border: 1px solid #d4d4d4;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.06),
+    0 2px 3px rgba(0, 0, 0, 0.08),
+    0 6px 14px rgba(0, 0, 0, 0.06);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+.auth-btn-3d-light:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.auth-btn-3d-light:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.14);
+}
+.auth-btn-3d-light:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-field-3d {
+  background: #e9eaec;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.13),
+    inset 0 1px 2px rgba(0, 0, 0, 0.07),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+.auth-field-3d:focus-within {
+  border-color: rgba(24, 24, 24, 0.22);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.17),
+    inset 0 1px 2px rgba(0, 0, 0, 0.09),
+    0 0 0 3px rgba(24, 24, 24, 0.07);
+}
+
+.auth-logo-3d {
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.35),
+    0 2px 3px rgba(0, 0, 0, 0.25),
+    0 6px 14px rgba(0, 0, 0, 0.2);
+}
+
+/* discreet scrollbars (dark pill on light) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.28);
+}

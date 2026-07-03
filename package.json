@@ -1,0 +1,78 @@
+{
+  "name": "study-notes-app",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "app:icon": "node scripts/gen-app-icon.mjs",
+    "app:dev": "STUDY_NOTES_DEV_URL=http://localhost:3000 electron .",
+    "app:build": "next build && node scripts/prep-electron.mjs && electron-builder --mac",
+    "app:release": "next build && node scripts/prep-electron.mjs && electron-builder --mac --publish always"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SamuelrSun/study-notes-app.git"
+  },
+  "build": {
+    "appId": "com.samuelwang.studynotes",
+    "productName": "Study Notes",
+    "directories": {
+      "output": "../study-notes-app-builds/dist-app"
+    },
+    "files": [
+      "electron/**/*"
+    ],
+    "afterPack": "./scripts/after-pack.cjs",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "SamuelrSun",
+        "repo": "study-notes-app"
+      }
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "target": [
+        "zip",
+        "dmg"
+      ],
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "notarize": true
+    },
+    "dmg": {
+      "title": "Study Notes"
+    }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
+    "@supabase/supabase-js": "^2.110.0",
+    "clsx": "^2.1.1",
+    "electron-updater": "^6.8.9",
+    "framer-motion": "^12.42.2",
+    "next": "16.2.2",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.2",
+    "sharp": "^0.35.3",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
