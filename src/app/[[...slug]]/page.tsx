@@ -1,16 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { usePathname } from "next/navigation";
 import type { Index, Note } from "@/features/notes/types";
 import { api } from "@/features/notes/api";
 import type { TextPart, VerseRef } from "@/features/notes/types";
 import {
+  addSiblingAfter,
+  addTopLevel,
   findByPath,
   flatten,
   indent,
   labelFor,
   outdent,
+  prevPointId,
+  removeAt,
   setPointParts,
   setVerseText,
   toggleStar,
@@ -118,9 +123,60 @@ export default function Home() {
       setNote((cur) => (cur ? applyBankText(cur, key, text) : cur));
   };
 
+  // Debounced autosave timer, declared up here so flushPendingSave can fire it
+  // early. The effect that arms it lives below (needs the handlers first).
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The note the autosave effect currently holds, so a flush can persist the
+  // in-flight value without waiting for the effect to re-run. Kept in a ref so
+  // flushPendingSave (below) always sees the latest note without re-binding.
+  const noteRef = useRef<Note | null>(null);
+  useEffect(() => {
+    noteRef.current = note;
+  }, [note]);
+
+  // Fire any pending debounced save right now. Called before a note switch and
+  // on unload so the previous note lands before the next one loads. Editors
+  // flush their in-progress value into note state first (see flushEditors).
+  const flushPendingSave = useCallback(() => {
+    if (!saveTimer.current) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+    const n = noteRef.current;
+    if (n) {
+      api.saveNote(n);
+      setSaving(false);
+    }
+  }, []);
+
+  // Editors register a flush callback here while focused; it commits their
+  // in-progress raw value into note state. Cleared on blur/commit. A Set so
+  // an unexpected double-register can't leak stale flushers. flushSync forces
+  // the setNote from each flusher (and the noteRef effect) to land before the
+  // caller reads noteRef — so a subsequent save sees the just-typed text.
+  const editorFlushers = useRef(new Set<() => void>());
+  const flushEditors = useCallback(() => {
+    if (editorFlushers.current.size === 0) return;
+    flushSync(() => {
+      for (const f of editorFlushers.current) f();
+    });
+  }, []);
+  // An editor calls this on focus with its flush fn; the returned unregister
+  // runs on blur/unmount. Passed down to PointEditor and the question editors.
+  const registerEditorFlush = useCallback((flush: () => void) => {
+    editorFlushers.current.add(flush);
+    return () => {
+      editorFlushers.current.delete(flush);
+    };
+  }, []);
+
   // Load the active note's full content.
   const skipNextSave = useRef(false);
   useEffect(() => {
+    // Persist the outgoing note before swapping — commit any focused editor's
+    // pending text, then fire the pending debounced save synchronously.
+    flushEditors();
+    flushPendingSave();
     if (!activeNoteId) {
       setNote(null);
       setSelectedPath(null);
@@ -146,7 +202,6 @@ export default function Home() {
   }, [activeNoteId]);
 
   // Debounced autosave whenever the note changes.
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!note) return;
     if (skipNextSave.current) {
@@ -173,6 +228,28 @@ export default function Home() {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
   }, [note]);
+
+  // No data loss if the app/window is quit mid-edit: commit the focused
+  // editor's pending text, then push the note synchronously. A keepalive fetch
+  // survives the unload where a normal fetch would be aborted.
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      flushEditors();
+      const n = noteRef.current;
+      if (!n) return;
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      fetch(`/api/notes/${n.id}`, {
+        method: "PUT",
+        body: JSON.stringify(n),
+        keepalive: true,
+      });
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [flushEditors]);
 
   // ---- structural handlers (left panel) ----
   const onNewFolder = async () => {
@@ -221,6 +298,7 @@ export default function Home() {
 
   const onTitleChange = (title: string) => setNote((cur) => (cur ? { ...cur, title } : cur));
   const onSpeakerChange = (speaker: string) => setNote((cur) => (cur ? { ...cur, speaker } : cur));
+  const onDateChange = (date: string) => setNote((cur) => (cur ? { ...cur, date } : cur));
   const onIntroChange = (introduction: string) =>
     setNote((cur) => (cur ? { ...cur, introduction } : cur));
   // Editing a verse updates every occurrence of it (this note's other points
@@ -294,6 +372,34 @@ export default function Home() {
     if (p) mutateOutline((o) => (dir < 0 ? outdent(o, p) : indent(o, p)));
   };
 
+  // ---- manual outline building (no import) ----
+  // Append a fresh top-level point and hand its id back so the panel can drop
+  // straight into edit mode on it. Reads current outline from noteRef.
+  const onCreateFirstPoint = (): string | null => {
+    const cur = noteRef.current;
+    if (!cur) return null;
+    const { outline, id } = addTopLevel(cur.outline);
+    setNote((c) => (c ? { ...c, outline } : c));
+    return id;
+  };
+  // Enter at the end of a point: insert a sibling right below it, return its id.
+  const onCreateSibling = (afterId: string): string | null => {
+    const p = pathById(afterId);
+    if (!p) return null;
+    const { outline, id } = addSiblingAfter(noteRef.current!.outline, p);
+    setNote((c) => (c ? { ...c, outline } : c));
+    return id;
+  };
+  // Backspace in an empty point: remove it, return the id of the point above
+  // to focus (null when it was the only/first point).
+  const onDeletePoint = (id: string): string | null => {
+    const p = pathById(id);
+    if (!p) return null;
+    const prev = prevPointId(noteRef.current!.outline, p);
+    mutateOutline((o) => removeAt(o, p));
+    return prev;
+  };
+
   // selected point + its label for the right panel
   const selectedPoint = note && selectedPath ? findByPath(note.outline, selectedPath) : null;
   const selectedLabel =
@@ -328,15 +434,20 @@ export default function Home() {
         <>
           <OutlinePanel
             note={note}
+            registerEditorFlush={registerEditorFlush}
             selectedPath={validSelected ? selectedPath : null}
             selectedPoint={validSelected ? selectedPoint : null}
             onTitleChange={onTitleChange}
             onSpeakerChange={onSpeakerChange}
+            onDateChange={onDateChange}
             onIntroChange={onIntroChange}
             onVerseEdit={onVerseEdit}
             onToggleStar={onToggleStar}
             onEditCommit={onEditCommit}
             onChangeDepth={onChangeDepth}
+            onCreateFirstPoint={onCreateFirstPoint}
+            onCreateSibling={onCreateSibling}
+            onDeletePoint={onDeletePoint}
             onSelect={setSelectedPath}
             onImportApply={(fn) => setNote((cur) => (cur ? fn(cur) : cur))}
             onAddQuestion={onAddQuestion}

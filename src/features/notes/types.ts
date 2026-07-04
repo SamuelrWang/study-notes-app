@@ -52,6 +52,7 @@ export type Note = {
   scriptureReading?: string; // raw text from the source
   scriptureParts?: VerseRef[]; // tokenized into verse pills
   speaker?: string; // manually chosen
+  date?: string; // ISO "YYYY-MM-DD"; empty/absent when unset
   introduction?: string; // HTML; the brother's opening word
   outline: OutlinePoint[];
   questions?: StudyQuestion[]; // absent on older notes

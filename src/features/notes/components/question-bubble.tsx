@@ -23,6 +23,7 @@ export function QuestionBubble({
   autoFocus,
   dragging,
   coveredLabels, // [pointId, "II.A.3"] pairs in outline order
+  registerEditorFlush,
   onTextCommit,
   onAnswerCommit,
   onDelete,
@@ -34,6 +35,8 @@ export function QuestionBubble({
   autoFocus: boolean;
   dragging: boolean;
   coveredLabels: [string, string][];
+  // Register a focused editor's flush fn (note-switch / app-quit safety).
+  registerEditorFlush: (flush: () => void) => () => void;
   onTextCommit: (edit: QuestionFieldEdit) => void;
   onAnswerCommit: (edit: QuestionFieldEdit) => void;
   onDelete: () => void;
@@ -86,6 +89,8 @@ export function QuestionBubble({
       {editing === "text" ? (
         <PlainEditor
           initial={partsToEditable(textParts, question.refs ?? [])}
+          registerFlush={registerEditorFlush}
+          onLiveCommit={(raw) => onTextCommit(parseEditedText(raw, question.refs ?? []))}
           onCommit={(raw) => {
             onTextCommit(parseEditedText(raw, question.refs ?? []));
             setEditing(null);
@@ -127,6 +132,8 @@ export function QuestionBubble({
           <PlainEditor
             initial={partsToEditable(answerParts, question.answerRefs ?? [])}
             multiline
+            registerFlush={registerEditorFlush}
+            onLiveCommit={(raw) => onAnswerCommit(parseEditedText(raw, question.answerRefs ?? []))}
             onCommit={(raw) => {
               onAnswerCommit(parseEditedText(raw, question.answerRefs ?? []));
               setEditing(null);
@@ -151,20 +158,33 @@ export function QuestionBubble({
 }
 
 // Minimal plain-text contentEditable: shows raw "[Label]" brackets, commits
-// on blur (and Enter unless multiline). Typing shortcuts apply.
+// on blur (and Enter unless multiline). Typing shortcuts apply. While typing,
+// the raw text is also pushed up on a short debounce via onLiveCommit so the
+// page-level autosave picks it up before blur — the DOM is only seeded once on
+// mount, so the caret is never disturbed by the prop echo.
 function PlainEditor({
   initial,
   multiline,
   onCommit,
+  onLiveCommit,
+  registerFlush,
   className,
 }: {
   initial: string;
   multiline?: boolean;
   onCommit: (raw: string) => void;
+  onLiveCommit?: (raw: string) => void;
+  // Register a flush that commits the current text without exiting edit mode.
+  registerFlush?: (flush: () => void) => () => void;
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const done = useRef(false);
+  const liveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Latest onLiveCommit, so the once-registered flush always calls the current
+  // closure (fresh refs) rather than the one from edit-start.
+  const liveRef = useRef(onLiveCommit);
+  liveRef.current = onLiveCommit;
 
   useEffect(() => {
     const el = ref.current;
@@ -180,7 +200,22 @@ function PlainEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Push the current text up now (used by debounced input + the flush hook).
+  const pushLive = () => {
+    if (liveTimer.current) clearTimeout(liveTimer.current);
+    liveTimer.current = null;
+    liveRef.current?.(ref.current?.innerText ?? "");
+  };
+
+  // Register a flush for note-switch / app-quit; unregister on unmount.
+  useEffect(() => {
+    if (!registerFlush) return;
+    return registerFlush(pushLive);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registerFlush]);
+
   const commit = () => {
+    if (liveTimer.current) clearTimeout(liveTimer.current);
     if (done.current) return;
     done.current = true;
     onCommit(ref.current?.innerText ?? "");
@@ -192,6 +227,11 @@ function PlainEditor({
       role="textbox"
       contentEditable
       suppressContentEditableWarning
+      onInput={() => {
+        if (!onLiveCommit) return;
+        if (liveTimer.current) clearTimeout(liveTimer.current);
+        liveTimer.current = setTimeout(pushLive, 500);
+      }}
       onKeyDown={(e) => {
         handleExpansionKey(e);
         if (e.key === "Enter" && !multiline) {

@@ -12,6 +12,7 @@ import { uiConfirm } from "@/features/ui/dialogs";
 import { VerseTab } from "./verse-tab";
 import { VersePill } from "./verse-pill";
 import { SpeakerPill } from "./speaker-pill";
+import { DatePill } from "./date-pill";
 import { IntroEditor } from "./intro-editor";
 import { PointEditor } from "./point-editor";
 import { Parts } from "./parts";
@@ -21,15 +22,24 @@ import { PencilIcon } from "./icons";
 
 type Props = {
   note: Note;
+  // Register a focused editor's flush fn so a note switch / app quit can commit
+  // its in-progress text before saving. Returns an unregister fn.
+  registerEditorFlush: (flush: () => void) => () => void;
   selectedPath: number[] | null;
   selectedPoint: OutlinePoint | null;
   onTitleChange: (title: string) => void;
   onSpeakerChange: (speaker: string) => void;
+  onDateChange: (date: string) => void;
   onIntroChange: (html: string) => void;
   onVerseEdit: (refIndex: number, verseIndex: number, html: string) => void;
   onToggleStar: (refIndex: number) => void;
   onEditCommit: (pointId: string, textParts: TextPart[], refs: VerseRef[]) => void;
   onChangeDepth: (pointId: string, dir: -1 | 1) => void;
+  // Manual outline building. Each returns the id of the point to focus next
+  // (or null when there's nothing to focus).
+  onCreateFirstPoint: () => string | null;
+  onCreateSibling: (afterId: string) => string | null;
+  onDeletePoint: (id: string) => string | null;
   onSelect: (path: number[]) => void;
   onImportApply: (fn: (note: Note) => Note) => void;
   onAddQuestion: () => string; // returns the new question's id
@@ -87,15 +97,20 @@ const SLIDE = { type: "spring", stiffness: 600, damping: 44, mass: 0.7 } as cons
 
 export function OutlinePanel({
   note,
+  registerEditorFlush,
   selectedPath,
   selectedPoint,
   onTitleChange,
   onSpeakerChange,
+  onDateChange,
   onIntroChange,
   onVerseEdit,
   onToggleStar,
   onEditCommit,
   onChangeDepth,
+  onCreateFirstPoint,
+  onCreateSibling,
+  onDeletePoint,
   onSelect,
   onImportApply,
   onAddQuestion,
@@ -108,12 +123,41 @@ export function OutlinePanel({
   const rows = flatten(note.outline);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [focusQuestionId, setFocusQuestionId] = useState<string | null>(null);
+  // A point id we want to enter edit mode on once it lands in the tree. The
+  // create handlers mutate note state asynchronously, so we can't setEditingId
+  // to a point that isn't rendered yet — we stash it and promote it below.
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
 
   // leave edit mode when switching notes
   useEffect(() => {
     setEditingId(null);
     setFocusQuestionId(null);
+    setPendingFocusId(null);
   }, [note.id]);
+
+  // Once a freshly-created point exists in the flattened rows, drop into edit
+  // mode on it and clear the pending marker.
+  useEffect(() => {
+    if (pendingFocusId && rows.some((r) => r.point.id === pendingFocusId)) {
+      setEditingId(pendingFocusId);
+      setPendingFocusId(null);
+    }
+  }, [pendingFocusId, rows]);
+
+  // Helpers the editor keyboard map and the affordances call. Each create
+  // returns the id to focus next; a delete may return the previous point's id.
+  const startFirstPoint = () => {
+    const id = onCreateFirstPoint();
+    if (id) setPendingFocusId(id);
+  };
+  const splitPoint = (afterId: string) => {
+    const id = onCreateSibling(afterId);
+    if (id) setPendingFocusId(id);
+  };
+  const deletePoint = (id: string) => {
+    const prev = onDeletePoint(id);
+    setEditingId(prev); // focus the point above, or exit edit mode if none
+  };
 
   // ---- study questions: placement + drag ----
   const questions = note.questions ?? [];
@@ -300,6 +344,7 @@ export function OutlinePanel({
           coveredLabels={rows
             .filter((r) => coveredIdsOf(q).includes(r.point.id))
             .map((r) => [r.point.id, fullLabelFor(r.path)] as [string, string])}
+          registerEditorFlush={registerEditorFlush}
           onTextCommit={(edit) => onQuestionText(q.id, edit)}
           onAnswerCommit={(edit) => onQuestionAnswer(q.id, edit)}
           onDelete={async () => {
@@ -347,12 +392,16 @@ export function OutlinePanel({
           </div>
         )}
 
-        {/* Speaker dropdown pill */}
-        <div className="mt-3 flex items-center gap-2">
+        {/* Speaker + date pills */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--faint)]">
             Speaker
           </span>
           <SpeakerPill value={note.speaker ?? ""} onChange={onSpeakerChange} />
+          <span className="ml-2 text-[11px] font-medium uppercase tracking-wide text-[var(--faint)]">
+            Date
+          </span>
+          <DatePill value={note.date ?? ""} onChange={onDateChange} />
         </div>
       </div>
 
@@ -424,6 +473,19 @@ export function OutlinePanel({
               <p className="px-3 pt-6 text-center text-xs text-[var(--faint)]">
                 This note has no outline.
               </p>
+              <div className="mx-auto mt-4 flex max-w-sm flex-col items-center gap-2 text-center">
+                <button
+                  onClick={startFirstPoint}
+                  className="btn-light flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-[var(--text)]"
+                >
+                  <PencilIcon />
+                  Start typing an outline
+                </button>
+                <p className="text-xs leading-relaxed text-[var(--faint)]">
+                  Type your points directly — Enter for the next point, Tab to
+                  indent.
+                </p>
+              </div>
               <ImportOutlineButton onApply={onImportApply} />
             </>
           )}
@@ -466,11 +528,24 @@ export function OutlinePanel({
                   <PointEditor
                     initial={partsToEditable(parts, point.refs ?? [])}
                     dark={selected}
+                    registerFlush={registerEditorFlush}
+                    onLiveCommit={(text) => {
+                      const parsed = parseEditedText(text, point.refs ?? []);
+                      onEditCommit(point.id, parsed.textParts, parsed.refs);
+                    }}
                     onCommit={(text) => {
                       const parsed = parseEditedText(text, point.refs ?? []);
                       onEditCommit(point.id, parsed.textParts, parsed.refs);
                       setEditingId(null);
                     }}
+                    onSplit={(text) => {
+                      const parsed = parseEditedText(text, point.refs ?? []);
+                      onEditCommit(point.id, parsed.textParts, parsed.refs);
+                      splitPoint(point.id);
+                    }}
+                    onIndent={() => onChangeDepth(point.id, 1)}
+                    onOutdent={() => onChangeDepth(point.id, -1)}
+                    onDeleteEmpty={() => deletePoint(point.id)}
                   />
                 ) : (
                   <div
@@ -520,6 +595,19 @@ export function OutlinePanel({
               </div>
             );
           })}
+
+          {/* subtle append affordance — adds a point at the end of the outline */}
+          {rows.length > 0 && (
+            <button
+              onClick={startFirstPoint}
+              className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-[var(--faint)] transition-colors hover:bg-black/[0.04] hover:text-[var(--muted)]"
+            >
+              <span className="w-8 shrink-0 select-none text-right text-sm font-semibold">
+                +
+              </span>
+              Add point
+            </button>
+          )}
         </div>
       </LayoutGroup>
 

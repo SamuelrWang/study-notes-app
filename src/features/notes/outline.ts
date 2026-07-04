@@ -114,6 +114,46 @@ export function addChild(points: OutlinePoint[], path: number[]): OutlinePoint[]
   return root;
 }
 
+// Insert a fresh top-level point at the end and report its id, so the caller
+// can drop straight into edit mode on it.
+export function addTopLevel(points: OutlinePoint[]): { outline: OutlinePoint[]; id: string } {
+  const root = structuredClone(points);
+  const p = newPoint();
+  root.push(p);
+  return { outline: root, id: p.id };
+}
+
+// Insert a fresh sibling directly after `path` and report its id. When `path`
+// is null the new point is appended at the top level.
+export function addSiblingAfter(
+  points: OutlinePoint[],
+  path: number[] | null,
+): { outline: OutlinePoint[]; id: string } {
+  const root = structuredClone(points);
+  const p = newPoint();
+  if (!path) {
+    root.push(p);
+    return { outline: root, id: p.id };
+  }
+  const { siblings, idx } = locate(root, path);
+  siblings.splice(idx + 1, 0, p);
+  return { outline: root, id: p.id };
+}
+
+// The id of the point rendered directly above `path` in the flattened view
+// (the "previous" point), or null when `path` is the very first row. Used to
+// pick the focus target after deleting a point.
+export function prevPointId(points: OutlinePoint[], path: number[]): string | null {
+  const rows = flatten(points);
+  const idx = rows.findIndex((r) => samePathArr(r.path, path));
+  if (idx <= 0) return null;
+  return rows[idx - 1].point.id;
+}
+
+function samePathArr(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
 export function updateField(
   points: OutlinePoint[],
   path: number[],
