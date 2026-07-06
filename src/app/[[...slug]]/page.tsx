@@ -28,7 +28,7 @@ import { NotesPanel } from "@/features/notes/components/notes-panel";
 import { applyBankText } from "@/features/notes/bank-sync";
 import { bankClient } from "@/features/bible/bank-client";
 import { refToKey } from "@/features/bible/lookup";
-import { settingsApi } from "@/features/settings/api";
+import { settingsApi, backupApi, type BackupStatus } from "@/features/settings/api";
 import { setExpansionRules } from "@/features/settings/expansion";
 import { DEFAULT_SETTINGS, type Settings } from "@/features/settings/types";
 import { SettingsModal } from "@/features/settings/components/settings-modal";
@@ -55,6 +55,17 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [backupNeeded, setBackupNeeded] = useState(false);
+  const [backupDismissed, setBackupDismissed] = useState(false);
+
+  // Ask the server once on mount whether a backup is due; the banner shows only
+  // when needed and un-dismissed. Failures stay silent (never block the app).
+  useEffect(() => {
+    backupApi
+      .status()
+      .then((s: BackupStatus) => setBackupNeeded(s.needed))
+      .catch(() => {});
+  }, []);
 
   const refreshIndex = useCallback(async () => {
     setIndex(await api.getIndex());
@@ -409,7 +420,14 @@ export default function Home() {
 
   return (
     <AuthGate>
-    <main className="flex h-screen w-screen gap-2 overflow-hidden bg-[var(--frame)] p-2">
+    <div className="flex h-screen w-screen flex-col bg-[var(--frame)]">
+      {backupNeeded && !backupDismissed && (
+        <BackupBanner
+          onDone={() => setBackupNeeded(false)}
+          onDismiss={() => setBackupDismissed(true)}
+        />
+      )}
+    <main className="flex w-full flex-1 gap-2 overflow-hidden p-2">
       {index ? (
         <Sidebar
           index={index}
@@ -484,6 +502,60 @@ export default function Home() {
         </div>
       )}
     </main>
+    </div>
     </AuthGate>
+  );
+}
+
+// Slim, dismissible nudge shown at the top of the app when a local backup is
+// due. Not a modal — it never blocks editing. "Back up now" runs a snapshot
+// inline; "Remind me later" snoozes for a week; × hides it for this session.
+function BackupBanner({ onDone, onDismiss }: { onDone: () => void; onDismiss: () => void }) {
+  const [state, setState] = useState<"idle" | "running" | "done">("idle");
+
+  const backUp = async () => {
+    setState("running");
+    try {
+      await backupApi.run();
+      setState("done");
+      setTimeout(onDone, 1200);
+    } catch {
+      setState("idle"); // let them retry or open Settings for the error detail
+    }
+  };
+  const later = async () => {
+    onDismiss();
+    backupApi.snooze().catch(() => {});
+  };
+
+  return (
+    <div className="flex items-center gap-3 border-b border-[var(--border-soft)] bg-[var(--inset)] px-4 py-2 text-xs text-[var(--muted)]">
+      <span className="flex-1">
+        {state === "done"
+          ? "Backed up ✓"
+          : "Your notes aren’t backed up. Nothing is stored in the cloud — everything lives on this computer."}
+      </span>
+      {state !== "done" && (
+        <>
+          <button
+            onClick={backUp}
+            disabled={state === "running"}
+            className="btn-light rounded-md px-2.5 py-1 text-xs font-medium text-[var(--text)] disabled:opacity-60"
+          >
+            {state === "running" ? "Backing up…" : "Back up now"}
+          </button>
+          <button onClick={later} className="text-xs text-[var(--muted)] hover:text-[var(--text)]">
+            Remind me later
+          </button>
+          <button
+            onClick={onDismiss}
+            aria-label="Dismiss"
+            className="text-[var(--faint)] hover:text-[var(--text)]"
+          >
+            ✕
+          </button>
+        </>
+      )}
+    </div>
   );
 }

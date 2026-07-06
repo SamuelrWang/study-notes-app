@@ -6,6 +6,52 @@ async function j<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Like j(), but surfaces the server's {error} message so backup fs failures
+// (permission, missing volume) reach the UI verbatim instead of "500".
+async function jm<T>(res: Response): Promise<T> {
+  const data = (await res.json().catch(() => null)) as T & { error?: string };
+  if (!res.ok) throw new Error(data?.error || `${res.status} ${res.statusText}`);
+  return data as T;
+}
+
+export type SnapshotInfo = { name: string; date: string };
+export type BackupStatus = {
+  folder: string;
+  lastBackupAt: string | null;
+  snoozeUntil: string | null;
+  snapshots: SnapshotInfo[];
+  needed: boolean;
+  reason: string;
+};
+
+export const backupApi = {
+  status: () => fetch("/api/backup").then((r) => jm<BackupStatus>(r)),
+
+  run: (folder?: string) =>
+    fetch("/api/backup", {
+      method: "POST",
+      body: JSON.stringify({ action: "run", folder }),
+    }).then((r) => jm<BackupStatus>(r)),
+
+  snooze: () =>
+    fetch("/api/backup", {
+      method: "POST",
+      body: JSON.stringify({ action: "snooze" }),
+    }).then((r) => jm<BackupStatus>(r)),
+
+  setFolder: (folder: string) =>
+    fetch("/api/backup", {
+      method: "POST",
+      body: JSON.stringify({ action: "setFolder", folder }),
+    }).then((r) => jm<BackupStatus>(r)),
+
+  restore: (snapshot: string) =>
+    fetch("/api/backup", {
+      method: "POST",
+      body: JSON.stringify({ action: "restore", snapshot }),
+    }).then((r) => jm<BackupStatus>(r)),
+};
+
 export const settingsApi = {
   get: () => fetch("/api/settings").then((r) => j<Settings>(r)),
 

@@ -14,6 +14,7 @@ export async function readSettings(): Promise<Settings> {
     return {
       profile: { ...DEFAULT_SETTINGS.profile, ...raw.profile },
       shortcuts: raw.shortcuts ?? [],
+      ...(raw.backup ? { backup: raw.backup } : {}),
     };
   } catch {
     return structuredClone(DEFAULT_SETTINGS);

@@ -14,9 +14,17 @@ export type ShortcutRule = {
   replacement: string; // e.g. "New Jerusalem"
 };
 
+// Local backup bookkeeping. All fields optional so older data dirs load clean.
+export type BackupSettings = {
+  folder?: string; // absolute path to the backup folder (~ already expanded)
+  lastBackupAt?: string; // ISO timestamp of the last successful snapshot
+  snoozeUntil?: string; // ISO timestamp; nudge stays quiet until then
+};
+
 export type Settings = {
   profile: Profile;
   shortcuts: ShortcutRule[];
+  backup?: BackupSettings;
 };
 
 export const DEFAULT_SETTINGS: Settings = {

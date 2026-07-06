@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import type { Profile } from "../types";
 import { Avatar } from "./avatar";
 import { getSupabase } from "@/lib/supabase-client";
+import { backupApi, type BackupStatus } from "../api";
+import { uiConfirm, uiPrompt } from "@/features/ui/dialogs";
 
 // Local profile shown at the bottom of the sidebar. No accounts — everything
 // stays in data/settings.json.
@@ -130,6 +132,150 @@ export function ProfilePage({ profile, onChange }: Props) {
         </p>
       </div>
 
+      <BackupSection />
+
+    </div>
+  );
+}
+
+// Relative "3 days ago" phrasing for the last-backup line.
+function relativeDate(iso: string): string {
+  const then = new Date(iso).getTime();
+  const diff = Date.now() - then;
+  const min = Math.round(diff / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} minute${min === 1 ? "" : "s"} ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr} hour${hr === 1 ? "" : "s"} ago`;
+  const day = Math.round(hr / 24);
+  if (day < 30) return `${day} day${day === 1 ? "" : "s"} ago`;
+  const mo = Math.round(day / 30);
+  return `${mo} month${mo === 1 ? "" : "s"} ago`;
+}
+
+function snapshotLabel(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+// Local-backup controls. Loads its own status; nothing here touches the cloud.
+function BackupSection() {
+  const [status, setStatus] = useState<BackupStatus | null>(null);
+  const [busy, setBusy] = useState<string | null>(null); // "run" | "restore:<name>"
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    backupApi.status().then(setStatus).catch(() => setStatus(null));
+  }, []);
+
+  const onBackupNow = async () => {
+    setBusy("run");
+    setError(null);
+    try {
+      setStatus(await backupApi.run());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onEditFolder = async () => {
+    const next = await uiPrompt("Backup folder", status?.folder ?? "", "Save");
+    if (next === null || !next.trim()) return;
+    setError(null);
+    try {
+      setStatus(await backupApi.setFolder(next.trim()));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const onRestore = async (name: string) => {
+    const ok = await uiConfirm("Restore this backup?", {
+      message:
+        "Replace all current notes with this backup? Current data is saved to a pre-restore copy first.",
+      confirmText: "Restore",
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy(`restore:${name}`);
+    setError(null);
+    try {
+      await backupApi.restore(name);
+      window.location.reload();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="mt-8 border-t border-[var(--border-soft)] pt-4">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--faint)]">
+        Backup
+      </div>
+      <p className="mt-1.5 max-w-md text-xs text-[var(--muted)]">
+        Nothing is stored in the cloud — your notes live on this computer. Back up to a synced
+        folder like iCloud Drive so a lost or broken computer doesn&apos;t take your notes with it.
+      </p>
+
+      <div className="mt-3 flex flex-col gap-1">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--faint)]">
+          Folder
+        </span>
+        <button
+          onClick={onEditFolder}
+          className="concave-field max-w-md truncate rounded-lg px-2.5 py-1.5 text-left text-sm text-[var(--text)] outline-none hover:text-[var(--text)]"
+          title="Click to change the backup folder"
+        >
+          {status?.folder ?? "…"}
+        </button>
+      </div>
+
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          onClick={onBackupNow}
+          disabled={busy === "run"}
+          className="btn-light rounded-md px-2.5 py-1 text-xs font-medium text-[var(--text)] disabled:opacity-60"
+        >
+          {busy === "run" ? "Backing up…" : "Back up now"}
+        </button>
+        <span className="text-xs text-[var(--muted)]">
+          {status?.lastBackupAt
+            ? `Last backup: ${relativeDate(status.lastBackupAt)}`
+            : "Never backed up"}
+        </span>
+      </div>
+
+      {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+
+      {status && status.snapshots.length > 0 && (
+        <div className="mt-4 flex flex-col gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--faint)]">
+            Snapshots
+          </span>
+          {status.snapshots.map((s) => (
+            <div
+              key={s.name}
+              className="flex max-w-md items-center justify-between gap-3 text-sm text-[var(--text)]"
+            >
+              <span className="text-[var(--muted)]">{snapshotLabel(s.date)}</span>
+              <button
+                onClick={() => onRestore(s.name)}
+                disabled={!!busy}
+                className="btn-light rounded-md px-2 py-0.5 text-xs font-medium text-[var(--text)] disabled:opacity-60"
+              >
+                {busy === `restore:${s.name}` ? "Restoring…" : "Restore"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
