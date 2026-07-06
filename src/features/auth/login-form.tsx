@@ -8,6 +8,8 @@ import { useLogin } from "./use-login";
 // Centered on the app's frame background by the auth gate.
 export function LoginForm() {
   const {
+    mode,
+    switchMode,
     email,
     setEmail,
     password,
@@ -16,14 +18,14 @@ export function LoginForm() {
     message,
     pending,
     signInFailed,
-    signInWithPassword,
-    signUpWithPassword,
+    onSubmit,
     sendMagicLink,
     resetPassword,
   } = useLogin();
 
   const [showPassword, setShowPassword] = useState(false);
   const busy = pending !== null;
+  const isSignup = mode === "signup";
 
   return (
     <div className="w-full max-w-[336px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
@@ -41,7 +43,7 @@ export function LoginForm() {
       </div>
 
       <h2 className="mt-7 text-[30px] font-bold leading-none tracking-[-0.8px] text-[#181818]">
-        Sign in
+        {isSignup ? "Create your account" : "Sign in"}
       </h2>
 
       {(error || message) && (
@@ -57,7 +59,7 @@ export function LoginForm() {
         </div>
       )}
 
-      <form onSubmit={signInWithPassword}>
+      <form onSubmit={onSubmit}>
         <div className="mt-7">
           <label htmlFor="login-email" className="mb-2 block text-[14px] font-medium text-[#181818]">
             Email Address
@@ -85,7 +87,7 @@ export function LoginForm() {
             <input
               id="login-password"
               type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
+              autoComplete={isSignup ? "new-password" : "current-password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-transparent text-[14px] text-[#181818] focus:outline-none"
@@ -99,7 +101,7 @@ export function LoginForm() {
               <EyeIcon off={showPassword} />
             </button>
           </div>
-          {signInFailed && (
+          {!isSignup && signInFailed && (
             <button
               type="button"
               onClick={resetPassword}
@@ -116,32 +118,40 @@ export function LoginForm() {
           disabled={busy}
           className="auth-btn-3d mt-7 flex h-[46px] w-full cursor-pointer items-center justify-center rounded-[10px] text-[15px] font-semibold text-white"
         >
-          {pending === "password" ? "Signing in…" : "Sign in"}
+          {isSignup
+            ? pending === "signup"
+              ? "Creating…"
+              : "Sign up"
+            : pending === "password"
+              ? "Signing in…"
+              : "Sign in"}
         </button>
       </form>
 
       <div className="mt-5 leading-[1.55]">
         <p className="text-[14px] text-[#9a9a9a]">
-          Don&apos;t have an account?{" "}
+          {isSignup ? "Already have an account? " : "Don't have an account? "}
           <button
             type="button"
-            onClick={signUpWithPassword}
+            onClick={() => switchMode(isSignup ? "signin" : "signup")}
             disabled={busy}
             className="cursor-pointer font-medium text-[#181818] hover:underline disabled:opacity-60"
           >
-            {pending === "signup" ? "Creating…" : "Sign up"}
+            {isSignup ? "Sign in" : "Sign up"}
           </button>
         </p>
       </div>
 
-      <button
-        type="button"
-        onClick={sendMagicLink}
-        disabled={busy}
-        className="mt-2 block cursor-pointer text-[13px] text-[#9a9a9a] hover:text-[#181818] hover:underline disabled:opacity-60"
-      >
-        {pending === "magic" ? "Sending link…" : "Email me a sign-in link instead"}
-      </button>
+      {!isSignup && (
+        <button
+          type="button"
+          onClick={sendMagicLink}
+          disabled={busy}
+          className="mt-2 block cursor-pointer text-[13px] text-[#9a9a9a] hover:text-[#181818] hover:underline disabled:opacity-60"
+        >
+          {pending === "magic" ? "Sending link…" : "Email me a sign-in link instead"}
+        </button>
+      )}
 
       <p className="mt-7 text-[12px] leading-relaxed text-[#9a9a9a]">
         Sign in once online — after that, Study Notes works fully offline.
