@@ -11,8 +11,8 @@ import {
   addTopLevel,
   findByPath,
   flatten,
+  fullLabelFor,
   indent,
-  labelFor,
   outdent,
   prevPointId,
   removeAt,
@@ -403,9 +403,7 @@ export default function Home() {
   // selected point + its label for the right panel
   const selectedPoint = note && selectedPath ? findByPath(note.outline, selectedPath) : null;
   const selectedLabel =
-    selectedPath && selectedPath.length
-      ? labelFor(selectedPath[selectedPath.length - 1], selectedPath.length - 1)
-      : null;
+    selectedPath && selectedPath.length ? fullLabelFor(selectedPath) : null;
   // guard: ensure selectedPath still resolves after structural edits
   const validSelected = note && selectedPath ? flatten(note.outline).some((r) => samePath(r.path, selectedPath)) : false;
 

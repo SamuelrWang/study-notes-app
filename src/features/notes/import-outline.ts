@@ -2,7 +2,7 @@
 
 import type { Note, OutlinePoint } from "./types";
 import { newPoint } from "./outline";
-import { expandLabel, parseEditedText } from "./refs";
+import { expandLabel, parseEditedText, splitCompoundRef } from "./refs";
 import { getSupabase } from "@/lib/supabase-client";
 
 // Client half of the outline import: prepare uploaded files, stream the
@@ -93,9 +93,7 @@ export function applyImportLine(
       if (title && (!n.title || n.title === "Untitled")) next = { ...next, title };
       if (number && !n.number) next = { ...next, number };
       if (scriptureReading) {
-        const parts = scriptureReading
-          .split(";")
-          .map((s) => s.trim())
+        const parts = splitCompoundRef(scriptureReading)
           .filter(Boolean)
           .map((label) => ({ label, verses: expandLabel(label) }));
         next = { ...next, scriptureReading, scriptureParts: parts };
